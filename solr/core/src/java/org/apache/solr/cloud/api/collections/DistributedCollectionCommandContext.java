@@ -49,7 +49,7 @@ public class DistributedCollectionCommandContext implements CollectionCommandCon
   }
 
   @Override
-  public ShardHandler getShardHandler() {
+  public ShardHandler newShardHandler() {
     // This method builds a new shard handler! A given shard handler can't be reused because it can only serve a single thread.
     return this.coreContainer.getShardHandlerFactory().getShardHandler();
   }
