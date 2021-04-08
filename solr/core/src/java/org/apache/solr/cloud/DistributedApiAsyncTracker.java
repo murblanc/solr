@@ -21,6 +21,7 @@ import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.solr.client.solrj.response.RequestStatusState;
 import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.common.SolrException;
@@ -84,10 +85,15 @@ public class DistributedApiAsyncTracker {
   private final InFlightJobs inFlightAsyncTasks;
 
   public DistributedApiAsyncTracker(SolrZkClient zkClient, String rootPath) {
+    this(zkClient, rootPath, MAX_TRACKED_ASYNC_TASKS);
+  }
+
+  @VisibleForTesting
+  DistributedApiAsyncTracker(SolrZkClient zkClient, String rootPath, int maxTrackedTasks) {
     persistentIdsPath = rootPath + ZK_ASYNC_PERSISTENT;
     inFlightIdsPath = rootPath + ZK_ASYNC_INFLIGHT;
 
-    trackedAsyncTasks = new SizeLimitedDistributedMap(zkClient, persistentIdsPath, MAX_TRACKED_ASYNC_TASKS, null);
+    trackedAsyncTasks = new SizeLimitedDistributedMap(zkClient, persistentIdsPath, maxTrackedTasks, null);
     inFlightAsyncTasks = new InFlightJobs(zkClient, inFlightIdsPath);
   }
 
