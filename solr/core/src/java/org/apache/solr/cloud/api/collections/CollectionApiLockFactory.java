@@ -17,74 +17,23 @@
 
 package org.apache.solr.cloud.api.collections;
 
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.google.common.annotations.VisibleForTesting;
+import org.apache.solr.cloud.DistributedCollectionLockFactory;
 import org.apache.solr.cloud.DistributedLock;
-import org.apache.solr.cloud.DistributedLockFactory;
+import org.apache.solr.cloud.DistributedMultiLock;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CollectionParams;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class implements a higher level locking abstraction for the Collection API using lower level read and write locks.
  */
-public class ApiLockFactory {
-  /**
-   * A lock as acquired for running a single Collection API command. Internally it is composed of multiple  {@link DistributedLock}'s.
-   */
-  static public class ApiLock {
-    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private final List<DistributedLock> locks;
-    private volatile boolean isReleased = false;
+public class CollectionApiLockFactory {
 
-    private ApiLock(List<DistributedLock> locks) {
-      this.locks = locks;
-    }
+  private final DistributedCollectionLockFactory lockFactory;
 
-    void waitUntilAcquired() {
-      if (isReleased) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Released lock can't be waited upon");
-      }
-
-      for (DistributedLock lock : locks) {
-        log.debug("ApiLock.waitUntilAcquired. About to wait on lock {}", lock);
-        lock.waitUntilAcquired();
-        log.debug("ApiLock.waitUntilAcquired. Acquired lock {}", lock);
-      }
-    }
-
-    void release() {
-      isReleased = true;
-      for (DistributedLock lock : locks) {
-        lock.release();
-      }
-    }
-
-    boolean isAcquired() {
-      if (isReleased) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Released lock can't be tested");
-      }
-      for (DistributedLock lock : locks) {
-        if (!lock.isAcquired()) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    @VisibleForTesting
-    int getCountInternalLocks() {
-      return locks.size();
-    }
-  }
-
-  private final DistributedLockFactory lockFactory;
-
-  ApiLockFactory(DistributedLockFactory lockFactory) {
+  CollectionApiLockFactory(DistributedCollectionLockFactory lockFactory) {
     this.lockFactory = lockFactory;
   }
 
@@ -98,14 +47,14 @@ public class ApiLockFactory {
    * from executing concurrently with an operation on one of the shards of the collection).
    * See documentation linked to SOLR-14840 regarding Collection API locking.
    *
-   * @return a lock that once {@link ApiLock#isAcquired()} guarantees the corresponding Collection
+   * @return a lock that once {@link DistributedMultiLock#isAcquired()} guarantees the corresponding Collection
    * API command can execute safely.
-   * The returned lock <b>MUST</b> be {@link ApiLock#release()} no matter what once no longer needed as otherwise it would
+   * The returned lock <b>MUST</b> be {@link DistributedMultiLock#release()} no matter what once no longer needed as otherwise it would
    * prevent other threads from locking.
    */
-  ApiLock createCollectionApiLock(CollectionParams.LockLevel lockLevel, String collName, String shardId, String replicaName) {
+  DistributedMultiLock createCollectionApiLock(CollectionParams.LockLevel lockLevel, String collName, String shardId, String replicaName) {
     if (lockLevel == CollectionParams.LockLevel.NONE) {
-      return new ApiLock(List.of());
+      return new DistributedMultiLock(List.of());
     }
 
     if (lockLevel == CollectionParams.LockLevel.CLUSTER) {
@@ -157,6 +106,6 @@ public class ApiLockFactory {
       }
     }
 
-    return new ApiLock(locks);
+    return new DistributedMultiLock(locks);
   }
 }

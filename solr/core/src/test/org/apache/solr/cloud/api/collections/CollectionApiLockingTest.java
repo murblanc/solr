@@ -21,13 +21,14 @@ import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.cloud.ZkDistributedLockFactory;
+import org.apache.solr.cloud.DistributedMultiLock;
+import org.apache.solr.cloud.ZkDistributedCollectionLockFactory;
 import org.apache.solr.cloud.ZkTestServer;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.params.CollectionParams;
 import org.junit.Test;
 
-public class ApiLockingTest  extends SolrTestCaseJ4 {
+public class CollectionApiLockingTest extends SolrTestCaseJ4 {
   private static final String COLLECTION_NAME = "lockColl";
   final String SHARD1_NAME = "lockShard1";
   final String SHARD2_NAME = "lockShard2";
@@ -46,7 +47,7 @@ public class ApiLockingTest  extends SolrTestCaseJ4 {
     try {
       server.run();
       try (SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), TIMEOUT)) {
-        ApiLockFactory apiLockFactory = new ApiLockFactory(new ZkDistributedLockFactory(zkClient, "/apiLockTestRoot"));
+        CollectionApiLockFactory apiLockFactory = new CollectionApiLockFactory(new ZkDistributedCollectionLockFactory(zkClient, "/apiLockTestRoot"));
 
         monothreadedTests(apiLockFactory);
         multithreadedTests(apiLockFactory);
@@ -56,19 +57,19 @@ public class ApiLockingTest  extends SolrTestCaseJ4 {
     }
   }
 
-  private void monothreadedTests(ApiLockFactory apiLockingHelper) throws Exception {
+  private void monothreadedTests(CollectionApiLockFactory apiLockingHelper) throws Exception {
     // Lock at collection level (which prevents locking + acquiring on any other level of the hierarchy)
-    ApiLockFactory.ApiLock collLock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
+    DistributedMultiLock collLock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("Collection should have been acquired", collLock.isAcquired());
     assertEquals("Lock at collection level expected to need one distributed lock", 1, collLock.getCountInternalLocks());
 
     // Request a shard lock. Will not be acquired as long as we don't release the collection lock above
-    ApiLockFactory.ApiLock shard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, null);
+    DistributedMultiLock shard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, null);
     assertFalse("Shard1 should not have been acquired", shard1Lock.isAcquired());
     assertEquals("Lock at shard level expected to need two distributed locks", 2, shard1Lock.getCountInternalLocks());
 
     // Request a lock on another shard. Will not be acquired as long as we don't release the collection lock above
-    ApiLockFactory.ApiLock shard2Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD2_NAME, null);
+    DistributedMultiLock shard2Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD2_NAME, null);
     assertFalse("Shard2 should not have been acquired", shard2Lock.isAcquired());
 
     assertTrue("Collection should still be acquired", collLock.isAcquired());
@@ -79,7 +80,7 @@ public class ApiLockingTest  extends SolrTestCaseJ4 {
     assertTrue("Shard2 should have been acquired now that collection lock released", shard2Lock.isAcquired());
 
     // Request a lock on replica of shard1
-    ApiLockFactory.ApiLock replicaShard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, REPLICA_NAME);
+    DistributedMultiLock replicaShard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, REPLICA_NAME);
     assertFalse("replicaShard1Lock should not have been acquired, shard1 is locked", replicaShard1Lock.isAcquired());
 
     // Now ask for a new lock on the collection
@@ -94,7 +95,7 @@ public class ApiLockingTest  extends SolrTestCaseJ4 {
     replicaShard1Lock.release();
 
     // Request a lock on replica of shard2
-    ApiLockFactory.ApiLock replicaShard2Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD2_NAME, REPLICA_NAME);
+    DistributedMultiLock replicaShard2Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD2_NAME, REPLICA_NAME);
     assertFalse("replicaShard2Lock should not have been acquired, shard2 is locked", replicaShard2Lock.isAcquired());
 
     shard2Lock.release();
@@ -109,13 +110,13 @@ public class ApiLockingTest  extends SolrTestCaseJ4 {
     replicaShard2Lock.release();
   }
 
-  private void multithreadedTests(ApiLockFactory apiLockingHelper) throws Exception {
+  private void multithreadedTests(CollectionApiLockFactory apiLockingHelper) throws Exception {
     // Lock on collection...
-    ApiLockFactory.ApiLock collLock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
+    DistributedMultiLock collLock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("Collection should have been acquired", collLock.isAcquired());
 
     // ...blocks a lock on replica from being acquired
-    final ApiLockFactory.ApiLock replicaShard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, REPLICA_NAME);
+    final DistributedMultiLock replicaShard1Lock = apiLockingHelper.createCollectionApiLock(CollectionParams.LockLevel.SHARD, COLLECTION_NAME, SHARD1_NAME, REPLICA_NAME);
     assertFalse("replicaShard1Lock should not have been acquired, because collection is locked", replicaShard1Lock.isAcquired());
 
     // Wait for acquisition of the replica lock on another thread (and be notified via a latch)

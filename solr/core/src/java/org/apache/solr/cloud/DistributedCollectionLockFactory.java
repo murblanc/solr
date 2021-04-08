@@ -17,10 +17,10 @@
 
 package org.apache.solr.cloud;
 
-import org.apache.solr.cloud.api.collections.ApiLockFactory;
+import org.apache.solr.cloud.api.collections.CollectionApiLockFactory;
 import org.apache.solr.common.params.CollectionParams;
 
-public interface DistributedLockFactory {
+public interface DistributedCollectionLockFactory {
   /**
    * Create a new lock of the specified type (read or write) entering the "competition" for actually getting the lock at
    * the given level for the given path i.e. a lock at {@code collName} or a lock at {@code collName/shardId} or a lock
@@ -28,14 +28,14 @@ public interface DistributedLockFactory {
    *
    * The paths are used to define which locks compete with each other (locks of equal paths compete).<p>
    *
-   * Upon return from this call, the lock <b>has not been acquired</b> but the it had entered the lock aquiring "competition",
+   * Upon return from this call, the lock <b>has not been acquired</b> but the it had entered the lock acquiring "competition",
    * and the caller can decide to wait until the lock is granted by calling {@link DistributedLock#waitUntilAcquired()}.<br>
    * Separating the lock creation from lock acquisition allows a more deterministic release of the locks when/if they can't be
    * acquired.<p>
    *
    * Locks at different paths are independent of each other, multiple {@link DistributedLock} are therefore requested for
-   * a single operation and are packaged together and returned as an {@link org.apache.solr.cloud.api.collections.ApiLockFactory.ApiLock},
-   * see {@link ApiLockFactory#createCollectionApiLock}.
+   * a single operation and are packaged together and returned as an {@link DistributedMultiLock},
+   * see {@link CollectionApiLockFactory#createCollectionApiLock}.
    * @param isWriteLock {@code true} if requesting a write lock, {@code false} for a read lock.
    * @param level The requested locking level. Can be one of:
    *              <ul><li>{@link org.apache.solr.common.params.CollectionParams.LockLevel#COLLECTION}</li>

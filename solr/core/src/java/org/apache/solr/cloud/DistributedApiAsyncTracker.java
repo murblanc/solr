@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 
 import org.apache.solr.client.solrj.response.RequestStatusState;
-import org.apache.solr.cloud.api.collections.DistributedCollectionCommandRunner;
+import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.util.NamedList;
@@ -343,7 +343,7 @@ public class DistributedApiAsyncTracker {
     }
 
     private String getPath(String asyncId) {
-      return rootNodePath + DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR + asyncId;
+      return rootNodePath + DistributedCollectionConfigSetCommandRunner.ZK_PATH_SEPARATOR + asyncId;
     }
   }
 }

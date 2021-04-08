@@ -80,7 +80,7 @@ public class CollApiCmds {
 
   /**
    * Map {@link org.apache.solr.common.params.CollectionParams.CollectionAction} to instances of {@link CollApiCmds.CollectionApiCommand} and
-   * being usable by both {@link OverseerCollectionMessageHandler} and {@link DistributedCollectionCommandRunner} so that
+   * being usable by both {@link OverseerCollectionMessageHandler} and {@link DistributedCollectionConfigSetCommandRunner} so that
    * the mappings do not have to be maintained in two places.
    */
   protected static class CommandMap {

@@ -71,7 +71,7 @@ import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.ClusterSingleton;
 import org.apache.solr.cloud.OverseerTaskQueue;
 import org.apache.solr.cloud.ZkController;
-import org.apache.solr.cloud.api.collections.DistributedCollectionCommandRunner;
+import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.cluster.events.ClusterEventProducer;
 import org.apache.solr.cluster.events.impl.ClusterEventProducerFactory;
 import org.apache.solr.cluster.placement.PlacementPluginConfig;
@@ -280,7 +280,7 @@ public class CoreContainer {
    * Non empty if the Collection API is executed in a distributed way and not on Overseer, once the CoreContainer has been initialized
    * properly, i.e. method {@link #load()} called. Until then it is null, and it is not expected to be read.
    */
-  private volatile Optional<DistributedCollectionCommandRunner> distributedCollectionCommandRunner;
+  private volatile Optional<DistributedCollectionConfigSetCommandRunner> distributedCollectionCommandRunner;
 
   private enum CoreInitFailedAction {fromleader, none}
 
@@ -761,12 +761,12 @@ public class CoreContainer {
     createHandler(ZK_STATUS_PATH, ZookeeperStatusHandler.class.getName(), ZookeeperStatusHandler.class);
 
     // CoreContainer is initialized enough at this stage so we can set distributedCollectionCommandRunner (the
-    // construction of DistributedCollectionCommandRunner uses Zookeeper so can't be done from the CoreContainer constructor
+    // construction of DistributedCollectionConfigSetCommandRunner uses Zookeeper so can't be done from the CoreContainer constructor
     // because there Zookeeper is not yet ready). Given this is used in the CollectionsHandler created next line, this is
     // the latest point where distributedCollectionCommandRunner can be initialized without refactoring this method...
     // TODO: manage to completely build CoreContainer in the constructor and not in the load() method... Requires some test refactoring.
     this.distributedCollectionCommandRunner = isZooKeeperAware() && cfg.getCloudConfig().getDistributedCollectionConfigSetExecution() ?
-        Optional.of(new DistributedCollectionCommandRunner(this)) : Optional.empty();
+        Optional.of(new DistributedCollectionConfigSetCommandRunner(this)) : Optional.empty();
 
     collectionsHandler = createHandler(COLLECTIONS_HANDLER_PATH, cfg.getCollectionsHandlerClass(), CollectionsHandler.class);
     final CollectionsAPI collectionsAPI = new CollectionsAPI(collectionsHandler);
@@ -2234,7 +2234,7 @@ public class CoreContainer {
     return placementPluginFactory;
   }
 
-  public Optional<DistributedCollectionCommandRunner> getDistributedCollectionCommandRunner() {
+  public Optional<DistributedCollectionConfigSetCommandRunner> getDistributedCollectionCommandRunner() {
     return this.distributedCollectionCommandRunner;
   }
 

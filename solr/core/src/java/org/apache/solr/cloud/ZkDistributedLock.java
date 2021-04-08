@@ -20,7 +20,7 @@ package org.apache.solr.cloud;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
-import org.apache.solr.cloud.api.collections.DistributedCollectionCommandRunner;
+import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.zookeeper.CreateMode;
@@ -30,6 +30,11 @@ import org.apache.zookeeper.Watcher;
 
 import static org.apache.solr.common.SolrException.ErrorCode.SERVER_ERROR;
 
+/**
+ * A lock to be used across cluster nodes based on Zookeeper. Used for the distributed Collection API and distributed
+ * Config Set API implementations.
+ * @see <a href="https://zookeeper.apache.org/doc/current/recipes.html#sc_recipes_Locks">Zookeeper lock recipe</a>
+ */
 abstract class ZkDistributedLock implements DistributedLock {
   /**
    * End of the lock node name prefix before the sequential part
@@ -86,7 +91,7 @@ abstract class ZkDistributedLock implements DistributedLock {
     this.lockDir = lockDir;
 
     // Create the SEQUENTIAL EPHEMERAL node. We enter the locking rat race here. We MUST eventually call release() or we block others.
-    lockNode = zkClient.create(lockDir + DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR + lockNodePrefix, null,
+    lockNode = zkClient.create(lockDir + DistributedCollectionConfigSetCommandRunner.ZK_PATH_SEPARATOR + lockNodePrefix, null,
         CreateMode.EPHEMERAL_SEQUENTIAL, false);
 
     sequence = getSequenceFromNodename(lockNode);
@@ -191,7 +196,7 @@ abstract class ZkDistributedLock implements DistributedLock {
         foundSelf = true;
       } else if (seq < sequence && isBlockedByNodeType(lock)) {
         // Return the full path to the node to watch
-        return lockDir + DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR + lock;
+        return lockDir + DistributedCollectionConfigSetCommandRunner.ZK_PATH_SEPARATOR + lock;
       }
       // seq is bigger than sequence, can't block us. If the iteration was sorted we could avoid iterating over those.
     }

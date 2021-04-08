@@ -46,7 +46,7 @@ public class ZkDistributedLockTest extends SolrTestCaseJ4 {
     try {
       server.run();
       try (SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), TIMEOUT)) {
-        DistributedLockFactory factory = new ZkDistributedLockFactory(zkClient, "/lockTestRoot");
+        DistributedCollectionLockFactory factory = new ZkDistributedCollectionLockFactory(zkClient, "/lockTestRoot");
 
         monothreadedTests(factory);
         multithreadedTests(factory);
@@ -56,7 +56,7 @@ public class ZkDistributedLockTest extends SolrTestCaseJ4 {
     }
   }
 
-  private void monothreadedTests(DistributedLockFactory factory) {
+  private void monothreadedTests(DistributedCollectionLockFactory factory) {
     // Collection level locks
     DistributedLock collRL1 = factory.createLock(false, CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("collRL1 should have been acquired", collRL1.isAcquired());
@@ -112,7 +112,7 @@ public class ZkDistributedLockTest extends SolrTestCaseJ4 {
     collRL4.release();
   }
 
-  private void multithreadedTests(DistributedLockFactory factory) throws Exception {
+  private void multithreadedTests(DistributedCollectionLockFactory factory) throws Exception {
     // Acquiring right away a read lock
     DistributedLock readLock = factory.createLock(false, CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("readLock should have been acquired", readLock.isAcquired());

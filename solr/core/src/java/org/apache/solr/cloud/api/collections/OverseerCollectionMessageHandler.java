@@ -54,7 +54,7 @@ import static org.apache.solr.common.params.CommonParams.NAME;
  * A {@link OverseerMessageHandler} that handles Collections API related overseer messages.<p>
  *
  * A lot of the content that was in this class got moved to {@link CollectionHandlingUtils} and {@link CollApiCmds}.<p>
- * The equivalent of this class for distributed Collection API command execution is {@link DistributedCollectionCommandRunner}.
+ * The equivalent of this class for distributed Collection API command execution is {@link DistributedCollectionConfigSetCommandRunner}.
  */
 public class OverseerCollectionMessageHandler implements OverseerMessageHandler, SolrCloseable {
 

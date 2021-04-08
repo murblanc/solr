@@ -17,41 +17,23 @@
 
 package org.apache.solr.cloud;
 
-import com.google.common.base.Preconditions;
-import org.apache.solr.cloud.api.collections.DistributedCollectionCommandRunner;
+import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.params.CollectionParams;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 
-/**
- * A distributed lock implementation using Zookeeper "directory" nodes created within the collection znode hierarchy.
- * The locks are implemented using ephemeral nodes placed below the "directory" nodes.
- *
- * @see <a href="https://zookeeper.apache.org/doc/current/recipes.html#sc_recipes_Locks">Zookeeper lock recipe</a>
- */
-public class ZkDistributedLockFactory implements DistributedLockFactory {
+abstract class ZkDistributedLockFactory {
 
   private final SolrZkClient zkClient;
   private final String rootPath;
 
-  public ZkDistributedLockFactory(SolrZkClient zkClient, String rootPath) {
+  ZkDistributedLockFactory(SolrZkClient zkClient, String rootPath) {
     this.zkClient = zkClient;
     this.rootPath = rootPath;
   }
 
-
-  public DistributedLock createLock(boolean isWriteLock, CollectionParams.LockLevel level, String collName, String shardId,
-                                    String replicaName) {
-    Preconditions.checkArgument(collName != null, "collName can't be null");
-    Preconditions.checkArgument(level == CollectionParams.LockLevel.COLLECTION || shardId != null,
-        "shardId can't be null when getting lock for shard or replica");
-    Preconditions.checkArgument(level != CollectionParams.LockLevel.REPLICA || replicaName != null,
-        "replicaName can't be null when getting lock for replica");
-
-    String lockPath = getLockPath(level, collName, shardId, replicaName);
-
+  protected DistributedLock doCreateLock(boolean isWriteLock, String lockPath) {
     try {
       // TODO optimize by first attempting to create the ZkDistributedLock without calling makeLockPath() and only call it
       //  if the lock creation fails. This will be less costly on high contention (and slightly more on low contention)
@@ -66,57 +48,11 @@ public class ZkDistributedLockFactory implements DistributedLockFactory {
     }
   }
 
-  /**
-   * Returns the Zookeeper path to the lock, creating missing nodes if needed.
-   * Note that the complete lock hierarchy (/locks and below) can be deleted if SolrCloud is stopped.
-   *
-   * The tree of lock directories for a given collection {@code collName} is as follows:
-   * <pre>
-   *   rootPath/
-   *      collName/
-   *         Locks   <-- EPHEMERAL collection level locks go here
-   *         _ShardName1/
-   *            Locks   <-- EPHEMERAL shard level locks go here
-   *            _replicaNameS1R1   <-- EPHEMERAL replica level locks go here
-   *            _replicaNameS1R2   <-- EPHEMERAL replica level locks go here
-   *         _ShardName2/
-   *            Locks   <-- EPHEMERAL shard level locks go here
-   *            _replicaNameS2R1   <-- EPHEMERAL replica level locks go here
-   *            _replicaNameS2R2   <-- EPHEMERAL replica level locks go here
-   * </pre>
-   * This method will create the path where the {@code EPHEMERAL} lock nodes should go. That path is:
-   * <ul>
-   *   <li>For {@link org.apache.solr.common.params.CollectionParams.LockLevel#COLLECTION} -
-   *   {@code /locks/collections/collName/Locks}</li>
-   *   <li>For {@link org.apache.solr.common.params.CollectionParams.LockLevel#SHARD} -
-   *   {@code /locks/collections/collName/_shardName/Locks}</li>
-   *   <li>For {@link org.apache.solr.common.params.CollectionParams.LockLevel#REPLICA} -
-   *   {@code /locks/collections/collName/_shardName/_replicaName}. There is no {@code Locks} subnode here because replicas do
-   *   not have children so no need to separate {@code EPHEMERAL} lock nodes from children nodes as is the case for shards
-   *   and collections</li>
-   * </ul>
-   * Note the {@code _} prefixing shards and replica names is to support shards or replicas called "{@code Locks}".
-   * Also note the returned path does not contain the separator ({@code "/"}) at the end.
-   */
-  private String getLockPath(CollectionParams.LockLevel level, String collName, String shardId, String replicaName) {
+  protected StringBuilder getPathPrefix() {
     StringBuilder path = new StringBuilder(100);
-    path.append(rootPath).append(DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR).append(collName).append(DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR);
-
-    final String LOCK_NODENAME = "Locks"; // Should not start with SUBNODE_PREFIX :)
-    final String SUBNODE_PREFIX = "_";
-
-    if (level == CollectionParams.LockLevel.COLLECTION) {
-      return path.append(LOCK_NODENAME).toString();
-    } else if (level == CollectionParams.LockLevel.SHARD) {
-      return path.append(SUBNODE_PREFIX).append(shardId).append(DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR).append(LOCK_NODENAME).toString();
-    } else if (level == CollectionParams.LockLevel.REPLICA) {
-      return path.append(SUBNODE_PREFIX).append(shardId).append(DistributedCollectionCommandRunner.ZK_PATH_SEPARATOR).append(SUBNODE_PREFIX).append(replicaName).toString();
-    } else {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Unsupported lock level " + level);
-    }
+    path.append(rootPath).append(DistributedCollectionConfigSetCommandRunner.ZK_PATH_SEPARATOR);
+    return path;
   }
-
-
 
   private void makeLockPath(String lockNodePath) throws KeeperException, InterruptedException {
     try {

@@ -35,7 +35,7 @@ import org.apache.solr.cloud.OverseerTaskQueue.QueueEvent;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.cloud.ZkController.NotInClusterStateException;
 import org.apache.solr.cloud.ZkShardTerms;
-import org.apache.solr.cloud.api.collections.DistributedCollectionCommandRunner;
+import org.apache.solr.cloud.api.collections.DistributedCollectionConfigSetCommandRunner;
 import org.apache.solr.cloud.api.collections.ReindexCollectionCmd;
 import org.apache.solr.cloud.api.collections.RoutedAlias;
 import org.apache.solr.cloud.overseer.SliceMutator;
@@ -139,7 +139,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
 
   protected final CoreContainer coreContainer;
   private final CollectionHandlerApi v2Handler;
-  private final Optional<DistributedCollectionCommandRunner> distributedCollectionCommandRunner;
+  private final Optional<DistributedCollectionConfigSetCommandRunner> distributedCollectionConfigSetCommandRunner;
 
   public CollectionsHandler() {
     // Unlike most request handlers, CoreContainer initialization
@@ -156,7 +156,7 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
   public CollectionsHandler(final CoreContainer coreContainer) {
     this.coreContainer = coreContainer;
     v2Handler = new CollectionHandlerApi(this);
-    distributedCollectionCommandRunner = coreContainer != null ? coreContainer.getDistributedCollectionCommandRunner() : Optional.empty();
+    distributedCollectionConfigSetCommandRunner = coreContainer != null ? coreContainer.getDistributedCollectionCommandRunner() : Optional.empty();
   }
 
   @Override
@@ -287,8 +287,8 @@ public class CollectionsHandler extends RequestHandlerBase implements Permission
     // can only be done if the Collection API command runs on the same JVM as the Overseer based cluster state update...
     // The configuration handling includes these checks to not allow distributing collection API without distributing
     // cluster state updates (but the other way around is ok). See constructor of CloudConfig.
-    if (distributedCollectionCommandRunner.isPresent()) {
-      return distributedCollectionCommandRunner.get().runApiCommand(m, action, timeout);
+    if (distributedCollectionConfigSetCommandRunner.isPresent()) {
+      return distributedCollectionConfigSetCommandRunner.get().runCollectionCommand(m, action, timeout);
     } else { // Sending the Collection API message to Overseer via a Zookeeper queue
       String operation = m.getStr(QUEUE_OPERATION);
       if (operation == null) {
