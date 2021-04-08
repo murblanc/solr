@@ -170,7 +170,7 @@ public class DistributedCollectionConfigSetCommandRunner {
    * appropriate Config Set method.
    * </ul>
    */
-  public void runConfigSetCommand(SolrQueryResponse rsp, ConfigSetsHandler.ConfigSetOperation operation, Map<String, Object> result, long timeoutMs) {
+  public void runConfigSetCommand(SolrQueryResponse rsp, ConfigSetsHandler.ConfigSetOperation operation, Map<String, Object> result, long timeoutMs) throws Exception {
     // We refuse new tasks, but will wait for already submitted ones (i.e. those that made it through this method earlier).
     // See stopAndWaitForPendingTasksToComplete() below
     if (shuttingDown) {
@@ -204,8 +204,6 @@ public class DistributedCollectionConfigSetCommandRunner {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, action + " " + configSetName + " interrupted", e);
-    } catch (Exception e) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, action + " " + configSetName + " failed", e);
     }
   }
 
