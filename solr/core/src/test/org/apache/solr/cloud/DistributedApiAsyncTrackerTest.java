@@ -17,8 +17,6 @@
 
 package org.apache.solr.cloud;
 
-import java.nio.file.Path;
-
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.response.RequestStatusState;
 import org.apache.solr.common.cloud.SolrZkClient;
@@ -30,7 +28,6 @@ import org.junit.Test;
  */
 public class DistributedApiAsyncTrackerTest extends SolrTestCaseJ4 {
 
-  protected Path zkDir;
   protected ZkTestServer zkServer;
   protected SolrZkClient zkClient;
 
@@ -38,9 +35,7 @@ public class DistributedApiAsyncTrackerTest extends SolrTestCaseJ4 {
   public void setUp() throws Exception {
     super.setUp();
 
-    Path tmpDir = createTempDir();
-    zkDir = tmpDir.resolve("zookeeperDir");
-    zkServer = new ZkTestServer(zkDir);
+    zkServer = new ZkTestServer(createTempDir("zookeeperDir"));
     zkServer.run();
     zkClient = new SolrZkClient(zkServer.getZkHost(), AbstractZkTestCase.TIMEOUT);
   }

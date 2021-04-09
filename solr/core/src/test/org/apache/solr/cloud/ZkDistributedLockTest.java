@@ -17,7 +17,6 @@
 
 package org.apache.solr.cloud;
 
-import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.solr.SolrTestCaseJ4;
@@ -28,35 +27,44 @@ import org.junit.Test;
 public class ZkDistributedLockTest extends SolrTestCaseJ4 {
 
   private static final String COLLECTION_NAME = "lockColl";
-  final String SHARD_NAME = "lockShard";
-  final String REPLICA_NAME = "lockReplica";
+  private final String SHARD_NAME = "lockShard";
+  private final String REPLICA_NAME = "lockReplica";
+
+  private static final String CONFIG_SET_NAME = "lockConfigSet";
 
   static final int TIMEOUT = 10000;
 
   /**
-   * Tests the obtention of a single read or write lock at a specific hierarchical level.
+   * Tests the obtention of a single read or write lock at a specific hierarchical level, for distributed Collection API
+   * locking as well as distributed Config Set API locking.<br>
    * Tests the logic with a single thread, then tests multithreaded wait for lock acquire works.
-   * Tests grouped to pay setup only once.
+   * Tests grouped to pay setup only once.<p>
+   *
+   * Higher level locking tests can be found at {@link org.apache.solr.cloud.api.collections.CollectionApiLockingTest} and
+   * {@link org.apache.solr.cloud.ConfigSetApiLockingTest}
    */
   @Test
   public void testSingleLocks() throws Exception {
-    Path zkDir = createTempDir("zkData");
-
-    ZkTestServer server = new ZkTestServer(zkDir);
+    ZkTestServer server = new ZkTestServer(createTempDir("zkData"));
     try {
       server.run();
       try (SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), TIMEOUT)) {
-        DistributedCollectionLockFactory factory = new ZkDistributedCollectionLockFactory(zkClient, "/lockTestRoot");
+        DistributedCollectionLockFactory collLockFactory = new ZkDistributedCollectionLockFactory(zkClient, "/lockTestCollectionRoot");
 
-        monothreadedTests(factory);
-        multithreadedTests(factory);
+        monothreadedCollectionTests(collLockFactory);
+        multithreadedCollectionTests(collLockFactory);
+
+        DistributedConfigSetLockFactory configSetLockFactory = new ZkDistributedConfigSetLockFactory(zkClient, "/lockTestConfigSetRoot");
+
+        monothreadedConfigSetTests(configSetLockFactory);
+        multithreadedConfigSetTests(configSetLockFactory);
       }
     } finally {
       server.shutdown();
     }
   }
 
-  private void monothreadedTests(DistributedCollectionLockFactory factory) {
+  private void monothreadedCollectionTests(DistributedCollectionLockFactory factory) {
     // Collection level locks
     DistributedLock collRL1 = factory.createLock(false, CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("collRL1 should have been acquired", collRL1.isAcquired());
@@ -112,7 +120,7 @@ public class ZkDistributedLockTest extends SolrTestCaseJ4 {
     collRL4.release();
   }
 
-  private void multithreadedTests(DistributedCollectionLockFactory factory) throws Exception {
+  private void multithreadedCollectionTests(DistributedCollectionLockFactory factory) throws Exception {
     // Acquiring right away a read lock
     DistributedLock readLock = factory.createLock(false, CollectionParams.LockLevel.COLLECTION, COLLECTION_NAME, null, null);
     assertTrue("readLock should have been acquired", readLock.isAcquired());
@@ -149,5 +157,74 @@ public class ZkDistributedLockTest extends SolrTestCaseJ4 {
       i++;
     }
     assertEquals("we should have been notified that writeLock was acquired", 0, latch.getCount());
+  }
+
+  private void monothreadedConfigSetTests(DistributedConfigSetLockFactory factory) {
+    DistributedLock configSetRL1 = factory.createLock(false, CONFIG_SET_NAME);
+    assertTrue("configSetRL1 should have been acquired", configSetRL1.isAcquired());
+
+    DistributedLock configSetRL2 = factory.createLock(false, CONFIG_SET_NAME);
+    assertTrue("configSetRL2 should have been acquired", configSetRL2.isAcquired());
+
+    DistributedLock configSetWL1 = factory.createLock(true, CONFIG_SET_NAME);
+    assertFalse("configSetWL1 should not have been acquired due to configSetRL1 and configSetRL2", configSetWL1.isAcquired());
+
+    configSetRL1.release();
+    configSetRL2.release();
+    assertTrue("configSetWL1 should have been acquired, configSetRL1 and configSetRL2 were released", configSetWL1.isAcquired());
+
+    DistributedLock configSetRL3 = factory.createLock(false, CONFIG_SET_NAME);
+    assertFalse("configSetRL3 should not have been acquired due to configSetWL1", configSetRL3.isAcquired());
+
+    configSetWL1.release();
+    assertTrue("configSetRL3 should have been acquired, configSetWL1 was released", configSetRL3.isAcquired());
+
+    configSetRL3.release();
+
+    try {
+      configSetRL3.isAcquired();
+      fail("isAcquired() called after release() on a lock should have thrown exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+  }
+
+  private void multithreadedConfigSetTests(DistributedConfigSetLockFactory factory) throws Exception {
+    // Acquiring right away a read lock
+    DistributedLock configSetRL1 = factory.createLock(false, CONFIG_SET_NAME);
+    assertTrue("configSetRL1 should have been acquired", configSetRL1.isAcquired());
+
+    // And now creating a write lock, that can't be acquired just yet, because of the read lock
+    DistributedLock configSetWL1 = factory.createLock(true, CONFIG_SET_NAME);
+    assertFalse("configSetWL1 should not have been acquired due to configSetRL1", configSetWL1.isAcquired());
+
+    // Wait for acquisition of the write lock on another thread (and be notified via a latch)
+    final CountDownLatch latch = new CountDownLatch(1);
+    new Thread(() -> {
+      configSetWL1.waitUntilAcquired();
+      // countDown() will not be called if waitUntilAcquired() threw exception of any kind
+      latch.countDown();
+    }).start();
+
+    // Wait for the thread to start and to get blocked in waitUntilAcquired()
+    // (thread start could have been checked more reliably using another latch, and verifying the thread is in waitUntilAcquired
+    // done through that thread stacktrace, but that would be overkill compared to the very slight race condition of waiting 30ms,
+    // but a race that would not cause the test to fail since we're testing... that nothing happened yet).
+    Thread.sleep(30);
+
+    assertEquals("we should not have been notified that configSetWL1 was acquired", 1, latch.getCount());
+    assertFalse("configSetWL1 should not have been acquired", configSetWL1.isAcquired());
+
+    configSetRL1.release();
+    assertTrue("configSetWL1 should have been acquired now that configSetRL1 was released", configSetWL1.isAcquired());
+
+    // Wait for the Zookeeper watch to fire + the thread to be unblocked and countdown the latch
+    // We'll wait up to 10 seconds here, so should be safe even if GC is extraordinarily high with a pause
+    int i = 0;
+    while (i < 1000 && latch.getCount() != 0) {
+      Thread.sleep(10);
+      i++;
+    }
+    assertEquals("we should have been notified that configSetWL1 was acquired", 0, latch.getCount());
   }
 }

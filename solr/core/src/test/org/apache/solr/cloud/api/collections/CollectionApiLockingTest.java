@@ -17,7 +17,6 @@
 
 package org.apache.solr.cloud.api.collections;
 
-import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.solr.SolrTestCaseJ4;
@@ -41,9 +40,7 @@ public class CollectionApiLockingTest extends SolrTestCaseJ4 {
    */
   @Test
   public void monothreadedApiLockTests() throws Exception {
-    Path zkDir = createTempDir("zkData");
-
-    ZkTestServer server = new ZkTestServer(zkDir);
+    ZkTestServer server = new ZkTestServer(createTempDir("zkData"));
     try {
       server.run();
       try (SolrZkClient zkClient = new SolrZkClient(server.getZkAddress(), TIMEOUT)) {
